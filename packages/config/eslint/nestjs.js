@@ -1,0 +1,15 @@
+/** @type {import("eslint").Linter.Config} */
+module.exports = {
+  extends: [
+    "./base.js",
+    "plugin:@typescript-eslint/recommended",
+  ],
+  env: {
+    node: true,
+  },
+  rules: {
+    "@typescript-eslint/interface-name-prefix": "off",
+    "@typescript-eslint/explicit-function-return-type": "off",
+    "@typescript-eslint/explicit-module-boundary-types": "off",
+  },
+};

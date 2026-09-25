@@ -1,0 +1,69 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+.next/
+out/
+
+# Turbo
+.turbo/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.vault
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+
+# Prisma
+apps/api/prisma/*.db
+!.env.example
+!.env.*.example
+.replit
+**/settings.local.json
+*.pem
+*.p12
+*.pfx
+*.key
+*.crt
+*.cer
+*.sqlite
+*.sqlite3
+*.bak
+*.zip
+*.timestamp-*
+build/
+target/
+.venv/
+__pycache__/
+.local/
+.claude/
+.codex/
+.kilocode/
+.pnpm-store/
+tmp/
+temp files/
+attached_assets/
+vendor/
+.cache/
+.github/hooks/
+.github/workflows/deploy*.yml
+.github/workflows/rollback*.yml

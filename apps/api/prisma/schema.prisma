@@ -1,0 +1,332 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────
+
+enum Plan {
+  FREE
+  STARTER
+  GROWTH
+  SCALE
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum Vertical {
+  AGENCY
+  SAAS
+  CONSULTING
+  ECOMMERCE
+  GENERIC
+}
+
+enum ConversationStatus {
+  ACTIVE
+  QUALIFIED
+  UNQUALIFIED
+  BOOKED
+  HANDOFF
+  ABANDONED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+// ─── Models ──────────────────────────────────────────────
+
+model Organization {
+  id                   String    @id @default(uuid())
+  name                 String
+  slug                 String    @unique
+  plan                 Plan      @default(FREE)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  stripeMeteredSubItemId String? // subscription item id for metered overage
+  trialEndsAt          DateTime?
+  costCapCents         Int?      // monthly spend ceiling; null = no cap
+  overageFlagged       Boolean   @default(false)
+  dataRetentionMonths  Int       @default(24)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  users               User[]
+  widgets             Widget[]
+  conversations       Conversation[]
+  apiKeys             ApiKey[]
+  leads               Lead[]
+  usageRecords        UsageRecord[]
+  auditLogs           AuditLog[]
+  knowledgeChunks     KnowledgeChunk[]
+  costRecords         CostRecord[]
+  integrationConfigs  IntegrationConfig[]
+  webhookConfigs      WebhookConfig[]
+
+  @@index([slug])
+  @@index([stripeCustomerId])
+}
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  name           String
+  role           UserRole  @default(MEMBER)
+  organizationId String
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  auditLogs    AuditLog[]
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+model Widget {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  domain         String
+  scriptKey      String   @unique @default(uuid())
+  config         Json?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  playbook      Playbook?
+
+  @@index([organizationId])
+  @@index([scriptKey])
+  @@index([domain])
+}
+
+model Playbook {
+  id                     String   @id @default(uuid())
+  widgetId               String   @unique
+  vertical               Vertical @default(GENERIC)
+  qualificationQuestions Json?
+  welcomeMessage         String?
+  handoffMessage         String?
+  calendarUrl            String?
+  brandColor             String?
+  logoUrl                String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  widget Widget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id             String             @id @default(uuid())
+  widgetId       String
+  organizationId String
+  visitorId      String             @default(uuid())
+  status         ConversationStatus @default(ACTIVE)
+  source         String?
+  utm            Json?
+  startedAt      DateTime           @default(now())
+  endedAt        DateTime?
+
+  widget        Widget       @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages      Message[]
+  lead          Lead?
+  qualification Json?
+
+  @@index([widgetId])
+  @@index([organizationId])
+  @@index([visitorId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model Message {
+  id             String      @id @default(uuid())
+  conversationId String
+  role           MessageRole
+  content        String
+  tokens         Int?
+  latencyMs      Int?
+  modelUsed      String?
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+model Lead {
+  id                String   @id @default(uuid())
+  conversationId    String   @unique
+  organizationId    String
+  email             String?
+  name              String?
+  company           String?
+  phone             String?
+  qualificationData Json?
+  score             Int      @default(0)
+  meetingBooked     Boolean  @default(false)
+  meetingUrl        String?
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@index([score])
+}
+
+model ApiKey {
+  id             String    @id @default(uuid())
+  organizationId String
+  keyHash        String
+  name           String
+  lastUsedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  expiresAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([keyHash])
+}
+
+model UsageRecord {
+  id                String   @id @default(uuid())
+  organizationId    String
+  month             String // YYYY-MM format
+  conversationCount Int      @default(0)
+  meetingCount      Int      @default(0)
+  tokenCount        Int      @default(0)
+  cost              Float    @default(0)
+  createdAt         DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, month])
+  @@index([organizationId])
+  @@index([month])
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  organizationId String
+  actorId        String?
+  action         String
+  resource       String
+  resourceId     String?
+  metadata       Json?
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model KnowledgeChunk {
+  id             String   @id @default(uuid())
+  organizationId String
+  widgetId       String?
+  sourceUrl      String
+  content        String
+  embedding      Unsupported("vector(1536)")?
+  chunkIndex     Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([widgetId])
+  @@index([sourceUrl])
+}
+
+model CostRecord {
+  id             String   @id @default(uuid())
+  organizationId String
+  model          String
+  inputTokens    Int      @default(0)
+  outputTokens   Int      @default(0)
+  costUsd        Float    @default(0)
+  conversationId String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([createdAt])
+}
+
+// ─── Integration Models ───────────────────────────────────────────────────────
+
+model IntegrationConfig {
+  id                     String    @id @default(uuid())
+  organizationId         String
+  provider               String    // 'calendly' | 'hubspot' | 'slack' | 'resend'
+  encryptedAccessToken   String
+  encryptedRefreshToken  String?
+  expiresAt              DateTime?
+  metadata               Json?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider])
+  @@index([organizationId])
+}
+
+model WebhookConfig {
+  id             String   @id @default(uuid())
+  organizationId String
+  url            String
+  secret         String
+  events         String[]
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries   WebhookDelivery[]
+
+  @@index([organizationId])
+}
+
+model WebhookDelivery {
+  id              String   @id @default(uuid())
+  webhookConfigId String
+  event           String
+  statusCode      Int
+  success         Boolean
+  attempt         Int      @default(1)
+  error           String?
+  createdAt       DateTime @default(now())
+
+  webhookConfig WebhookConfig @relation(fields: [webhookConfigId], references: [id], onDelete: Cascade)
+
+  @@index([webhookConfigId])
+  @@index([createdAt])
+}

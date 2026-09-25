@@ -1,0 +1,23 @@
+{
+  "name": "@yaychatbot/widget",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./dist/widget.js",
+  "scripts": {
+    "dev": "node build.mjs --watch",
+    "build": "node build.mjs",
+    "build:check-size": "node build.mjs && node -e \"const{statSync}=require('fs');const{execSync}=require('child_process');const gz=execSync('gzip -c dist/widget.js').length;const raw=statSync('dist/widget.js').size;console.log('Raw: '+(raw/1024).toFixed(1)+'kb | Gzipped: '+(gz/1024).toFixed(1)+'kb');if(gz>12288){console.error('OVER 12kb BUDGET');process.exit(1)}\"",
+    "lint": "eslint \"src/**/*.ts\"",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@yaychatbot/config": "workspace:*",
+    "@typescript-eslint/eslint-plugin": "^7.16.1",
+    "@typescript-eslint/parser": "^7.16.1",
+    "esbuild": "^0.23.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "typescript": "^5.5.3"
+  }
+}

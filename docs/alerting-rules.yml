@@ -1,0 +1,118 @@
+# Alerting Rules — YayChatbot Production
+#
+# This file documents the alert thresholds and configurations.
+# Implement these in your observability platform (Axiom, Sentry, or UptimeRobot).
+#
+# ─── Axiom APL Monitors ────────────────────────────────────────────────────────
+# Configure at: https://app.axiom.co → Monitors → New Monitor
+
+monitors:
+  # 1. LLM Error Rate > 5%
+  - name: "LLM Error Rate High"
+    description: "Fires when LLM provider errors exceed 5% of requests in a 5-minute window"
+    query: |
+      ['yaychatbot-api']
+      | where level == "error" and context == "LlmService"
+      | summarize
+          errors = count(),
+          total  = countif(context == "LlmService")
+          by bin(_time, 5m)
+      | where (errors / todouble(total)) > 0.05
+    threshold: 1
+    window_minutes: 5
+    severity: critical
+    channels:
+      - slack: "#alerts-production"
+      - pagerduty: true
+    runbook: "docs/runbooks/LLM_OUTAGE.md"
+
+  # 2. API P95 Latency > 3s
+  - name: "API Latency Degraded"
+    description: "Fires when the 95th-percentile response time exceeds 3 000 ms"
+    query: |
+      ['yaychatbot-api']
+      | where isnotnull(durationMs)
+      | summarize p95 = percentile(durationMs, 95) by bin(_time, 5m)
+      | where p95 > 3000
+    threshold: 1
+    window_minutes: 5
+    severity: warning
+    channels:
+      - slack: "#alerts-production"
+    runbook: "docs/runbooks/DATABASE_INCIDENT.md"
+
+  # 3. Failed Webhook Deliveries
+  - name: "Webhook Delivery Failures"
+    description: "Fires when more than 10 webhook deliveries fail within 10 minutes"
+    query: |
+      ['yaychatbot-api']
+      | where level == "error" and context == "WebhookService"
+      | summarize failures = count() by bin(_time, 10m)
+      | where failures > 10
+    threshold: 1
+    window_minutes: 10
+    severity: warning
+    channels:
+      - slack: "#alerts-production"
+
+  # 4. Widget CDN Errors (Cloudflare)
+  - name: "Widget CDN 5xx Rate"
+    description: "Fires when cdn.yaychatbot.com returns >1% 5xx responses"
+    source: cloudflare_analytics
+    threshold_pct: 1
+    window_minutes: 5
+    severity: critical
+    channels:
+      - slack: "#alerts-production"
+      - pagerduty: true
+    runbook: "docs/runbooks/WIDGET_NOT_LOADING.md"
+
+# ─── Sentry Alert Rules ────────────────────────────────────────────────────────
+# Configure at: Sentry → Alerts → Create Alert Rule
+
+sentry_alerts:
+  - name: "Unhandled API Exceptions Spike"
+    project: yaychatbot-api
+    conditions:
+      - type: event_frequency
+        value: 10
+        interval: 5m
+    actions:
+      - notify_slack: "#alerts-production"
+
+  - name: "Dashboard JS Error Spike"
+    project: yaychatbot-dashboard
+    conditions:
+      - type: event_frequency
+        value: 20
+        interval: 5m
+    actions:
+      - notify_slack: "#alerts-production"
+
+# ─── Uptime Checks ─────────────────────────────────────────────────────────────
+uptime:
+  - name: "API Health"
+    url: "https://api.yaychatbot.com/health"
+    interval_seconds: 60
+    expected_status: 200
+    alert_after_failures: 2
+    channels:
+      - slack: "#alerts-production"
+      - pagerduty: true
+
+  - name: "Dashboard"
+    url: "https://app.yaychatbot.com"
+    interval_seconds: 60
+    expected_status: 200
+    alert_after_failures: 2
+    channels:
+      - slack: "#alerts-production"
+
+  - name: "Widget CDN"
+    url: "https://cdn.yaychatbot.com/widget/latest/widget.js"
+    interval_seconds: 60
+    expected_status: 200
+    alert_after_failures: 2
+    channels:
+      - slack: "#alerts-production"
+      - pagerduty: true

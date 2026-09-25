@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YayChatbot Widget — Test Page</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 800px;
+      margin: 60px auto;
+      padding: 0 20px;
+      color: #1f2937;
+      line-height: 1.6;
+    }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    p { color: #6b7280; }
+    code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+    .card {
+      background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px;
+      padding: 20px; margin-top: 24px;
+    }
+    .card h2 { font-size: 16px; margin-bottom: 8px; }
+    .controls { display: flex; gap: 8px; margin-top: 16px; }
+    .controls button {
+      padding: 8px 16px; border-radius: 8px; border: 1px solid #d1d5db;
+      background: #fff; cursor: pointer; font-size: 13px;
+    }
+    .controls button:hover { background: #f3f4f6; }
+  </style>
+</head>
+<body>
+  <h1>YayChatbot Widget Test</h1>
+  <p>This page loads the widget with a mock config endpoint to verify injection, shadow DOM isolation, and all screens.</p>
+
+  <div class="card">
+    <h2>Public API Controls</h2>
+    <p>Use these buttons to test the programmatic API:</p>
+    <div class="controls">
+      <button onclick="window.YayChatbot?.open()">Open</button>
+      <button onclick="window.YayChatbot?.close()">Close</button>
+      <button onclick="window.YayChatbot?.toggle()">Toggle</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Embedding Code</h2>
+    <p><code>&lt;script async src="widget.js" data-key="test-key-123"&gt;&lt;/script&gt;</code></p>
+  </div>
+
+  <div class="card">
+    <h2>CSS Isolation Test</h2>
+    <p>The styles below should NOT affect the widget (shadow DOM isolation):</p>
+    <style>
+      button { background: red !important; color: yellow !important; }
+      input { border: 5px dashed green !important; }
+    </style>
+    <p>If the widget still looks normal, shadow DOM is working correctly.</p>
+  </div>
+
+  <!-- Mock service worker to intercept /api/v1/chat/config/:key -->
+  <script>
+    // Intercept fetch to provide mock config
+    const originalFetch = window.fetch;
+    window.fetch = function(url, opts) {
+      const urlStr = typeof url === 'string' ? url : url.toString();
+
+      // Mock config endpoint
+      if (urlStr.includes('/api/v1/chat/config/')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          success: true,
+          data: {
+            chatbotId: 'test-bot-001',
+            apiUrl: window.location.origin,
+            name: 'YayBot',
+            greeting: 'Hey! 👋 How can we help you today?',
+            position: 'bottom-right',
+            primaryColor: '#6366f1',
+            textColor: '#ffffff',
+            fontFamily: 'system-ui',
+            offlineMessage: "We're currently offline.",
+            qualificationEnabled: true,
+            qualificationSteps: [
+              {
+                id: 'role',
+                question: 'What best describes you?',
+                type: 'buttons',
+                options: [
+                  { label: 'Business Owner', value: 'owner' },
+                  { label: 'Developer', value: 'dev' },
+                  { label: 'Marketer', value: 'marketer' },
+                  { label: 'Just Browsing', value: 'browsing' }
+                ]
+              },
+              {
+                id: 'team-size',
+                question: 'How large is your team?',
+                type: 'buttons',
+                options: [
+                  { label: '1-5', value: 'small' },
+                  { label: '6-20', value: 'medium' },
+                  { label: '21-100', value: 'large' },
+                  { label: '100+', value: 'enterprise' }
+                ]
+              }
+            ],
+            leadCaptureEnabled: true,
+            leadCaptureFields: [
+              { name: 'name', label: 'Name', type: 'text', required: true, placeholder: 'Your name' },
+              { name: 'email', label: 'Email', type: 'email', required: true, placeholder: 'you@example.com' },
+              { name: 'phone', label: 'Phone', type: 'tel', required: false, placeholder: '+1 (555) 000-0000' }
+            ]
+          }
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+
+      // Mock message endpoint
+      if (urlStr.includes('/api/v1/chat/message')) {
+        return new Promise(resolve => {
+          setTimeout(() => {
+            resolve(new Response(JSON.stringify({
+              success: true,
+              data: {
+                id: 'msg-' + Date.now(),
+                conversationId: 'conv-test-001',
+                content: 'Thanks for your message! This is a mock response from YayBot. I can help you with questions about our product, pricing, or getting started.',
+              }
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+          }, 800);
+        });
+      }
+
+      // Mock lead endpoint
+      if (urlStr.includes('/api/v1/chat/lead')) {
+        return Promise.resolve(new Response(JSON.stringify({ success: true }), {
+          status: 200, headers: { 'Content-Type': 'application/json' }
+        }));
+      }
+
+      // Mock offline endpoint
+      if (urlStr.includes('/api/v1/chat/offline')) {
+        return Promise.resolve(new Response(JSON.stringify({ success: true }), {
+          status: 200, headers: { 'Content-Type': 'application/json' }
+        }));
+      }
+
+      return originalFetch.call(this, url, opts);
+    };
+  </script>
+
+  <!-- Load the widget -->
+  <script async src="dist/widget.js" data-key="test-key-123"></script>
+</body>
+</html>
